@@ -1,0 +1,22 @@
+NETWORK
+% bin filename
+%T   ../../../Data/berea
+F   A
+#
+
+
+SAT_TARGET
+%finalSat maxPc maxDeltaSw maxDeltaPc calcKr calcI
+0.00 1.0E21 0.01 500000.0 F F
+1.00 -1.0E21 0.01 500000.0 F F
+#
+
+
+EQUIL_CON_ANG
+% model min max delta gamma scheme m2_separation
+1 0 0 -1.0 -1.0 rand 25.2
+#
+
+RES_FORMAT
+matlab
+#

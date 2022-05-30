@@ -1,0 +1,12 @@
+NETWORK
+    F   A  
+
+SAT_TARGET
+  0.00 1.0E21 0.01 500000.0 F F  1.00 -1.0E21 0.01 500000.0 F F  
+
+EQUIL_CON_ANG
+  1 0 0 -1.0 -1.0 rand 25.2  
+
+RES_FORMAT
+matlab  
+
