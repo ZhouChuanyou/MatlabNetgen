@@ -16,17 +16,19 @@ classdef Polygon<handle & Shape
                 shapeFactor, initConAng, numCorners, connNum)
             %UNTITLED15 构造此类的实例
             %   此处显示详细说明
-            if nargin==9
-                obj = Shape(parent, common, oil, water, radius,...
+            obj = obj@Shape(parent, common, oil, water, radius,...
                     shapeFactor,initConAng, connNum);
+            if nargin==9
+%                 obj = Shape(parent, common, oil, water, radius,...
+%                     shapeFactor,initConAng, connNum);
                 obj.m_numCorners = numCorners;
                 obj.m_numLayers = 0;
                 obj.m_maxConAngSpont = pi; 
                 for i = 1:obj.m_numCorners
-                    corner = CornerApex(initConAng, obj);
+                    corner = CornerApex(initConAng, obj,1);
                     layer = LayerApex(corner, obj);
-                    obj.m_waterInCorner{end+1}(corner);
-                    obj.m_oilInCorner{end+1}(layer);
+                    obj.m_waterInCorner{end+1} = corner;
+                    obj.m_oilInCorner{end+1} =layer;
                 end
             else  % radius实际上是shapeCp的意思，这是Polygon的第二个构造函数
                 obj = Shape(parent, common, oil, water, radius);
@@ -42,10 +44,14 @@ classdef Polygon<handle & Shape
             end
         end
         
-        function outputArg = method1(obj,inputArg)
+        function numCorners = numCorners(obj)
             %METHOD1 此处显示有关此方法的摘要
             %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+            numCorners = obj.m_numCorners;
+        end
+        
+        function oilInCorner = oilInCorner(obj,crn)
+            oilInCorner = obj.m_oilInCorner{crn};
         end
     end
 end

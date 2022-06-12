@@ -3,10 +3,10 @@ classdef Shape<handle
     %   此处显示详细说明
     
     properties
-        MAX_NEWT_ITR;                  
-        EPSILON;                       
-        PI;                            
-        INF_NEG_NUM;                   
+        MAX_NEWT_ITR=1000;                  
+        EPSILON=1.0E-6;                       
+        PI=pi;                            
+        INF_NEG_NUM=-1.0E21;                   
 
         m_parent;                      
         m_commonData;                  
@@ -67,7 +67,7 @@ classdef Shape<handle
                 obj.m_area = power(obj.m_radius, 2.0) / ...
                     (4.0 * obj.m_shapeFactor); % From Oren; This is ~correct for all shape
                 obj.m_areaWater = obj.m_area;
-                assure(m_area > 0.0, "1");                
+                obj.assure(obj.m_area > 0.0, "1");                
             else
                 obj.m_parent = parent;
                 obj.m_oil = oil;
@@ -96,10 +96,36 @@ classdef Shape<handle
             end            
         end
         
-        function outputArg = method1(obj,inputArg)
+        function assure(obj,cond,errorMsg)
             %METHOD1 此处显示有关此方法的摘要
             %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+            if ~cond
+                fprintf('Shape::%s',errorMsg);
+                % assert
+            end
+            return; % comment for checking
+        end
+        
+        function setGravityCorrection(obj,nodeOne,nodeTwo)
+            if nargin == 2
+                % 输入一个参数的时候，nodeOne代表实际是Node* node
+                obj.m_gravityCorrection = (obj.m_water.density()-...
+                    obj.m_oil.density())*(obj.m_commonData.gravConstX()*...
+                    nodeOne.xPos()+obj.m_commonData.gravConstY()*nodeOne.yPos()...
+                    + obj.m_commonData.gravConstZ()*nodeOne.zPos());
+            elseif nargin ==3
+                xPos = (nodeOne.xPos()+nodeTwo.xPos())/2.0;
+                yPos = (nodeOne.yPos()+nodeTwo.yPos())/2.0;
+                zPos = (nodeOne.zPos()+nodeTwo.zPos())/2.0;
+                obj.m_gravityCorrection = (obj.m_water.density()-...
+                    obj.m_oil.density())*(obj.m_commonData.gravConstX()*xPos...
+                    + obj.m_commonData.gravConstY()*yPos + ...
+                    obj.m_commonData.gravConstZ()*zPos);
+            end
+        end
+        
+        function radius = radius(obj)
+            radius = obj.m_radius;
         end
     end
 end

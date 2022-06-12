@@ -18,6 +18,12 @@ classdef Node<handle
     end
     
     methods
+        % Constructor for the node class. Inlet node has index == 0 whereas outlet
+        % has the index has index == numPores + 1 If node is recognised to be inlet 
+        % or outlet reservoir the x location is moved outside the reservoir to prevent 
+        % them having the same x coord as the first line of pores (which usually are 
+        % at 0.0 or xSize. This is required for these to be recognised as in/outlet
+        % if boxsize is set to be 1.0.
         function obj = Node(index,numPores,xPos,yPos,zPos,exitSeparation)
             %UNTITLED12 构造此类的实例
             %   此处显示详细说明
@@ -29,7 +35,7 @@ classdef Node<handle
             obj.m_optimizedIndex = -1;
             obj.m_oldIndex = index;
             obj.m_exitSeparation = exitSeparation;
-            if m_index == 0+1 % +1
+            if obj.m_index == 0+1 % +1
                 obj.m_isOutsideLattice = false;   % We are at inlet face
                 obj.m_isEntryRes = true;
                 obj.m_isExitRes = false;
@@ -37,7 +43,7 @@ classdef Node<handle
                 obj.m_isOutsideLattice = false;  % We are at outlet face
                 obj.m_isEntryRes = false;
                 obj.m_isExitRes = true;
-            elseif obj.m_index > 0+1 && obj.m_index <= m_numPores+1
+            elseif obj.m_index > 0+1 && obj.m_index <= obj.m_numPores+1
                 obj.m_isOutsideLattice = false;  % We are inside network
                 obj.m_isEntryRes = false;
                 obj.m_isExitRes = false;
@@ -46,18 +52,41 @@ classdef Node<handle
                 obj.m_isEntryRes = false;
                 obj.m_isExitRes = false;
             end
-        end
+        end        
         
-        % Constructor for the node class. Inlet node has index == 0 whereas outlet
-        % has the index has index == numPores + 1 If node is recognised to be inlet 
-        % or outlet reservoir the x location is moved outside the reservoir to prevent 
-        % them having the same x coord as the first line of pores (which usually are 
-        % at 0.0 or xSize. This is required for these to be recognised as in/outlet
-        % if boxsize is set to be 1.0.
-        function outputArg = method1(obj,inputArg)
+        function isInsideBox = isInsideBox(obj,boxStart,boxEnd)
             %METHOD1 此处显示有关此方法的摘要
             %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+            isInsideBox = obj.m_xPos >= obj.m_exitSeparation*boxStart &&...
+                obj.m_xPos <= obj.m_exitSeparation*boxEnd;
+        end
+        
+        function xPos = xPos(obj)
+            xPos = obj.m_xPos;
+        end
+        
+        function yPos = yPos(obj)
+            yPos = obj.m_yPos;
+        end
+        
+        function zPos = zPos(obj)
+            zPos = obj.m_zPos;
+        end
+        
+        function oldIndex = oldIndex(obj)
+            oldIndex = obj.m_oldIndex;
+        end
+        
+        function index = index(obj)
+            index = obj.m_index;
+        end
+        
+        function isExitRes = isExitRes(obj)
+            isExitRes = obj.m_isExitRes;
+        end
+        
+        function isEntryRes = isEntryRes(obj)
+            isEntryRes = obj.m_isEntryRes;
         end
     end
 end

@@ -25,11 +25,24 @@ classdef Fluid<handle
             end
         end
         
-        function outputArg = method1(obj,inputArg)
+        function viscosity = viscosity(obj)
             %METHOD1 此处显示有关此方法的摘要
             %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+            viscosity = obj.m_viscosity;
         end
+        
+        function density = density(obj)
+            density = obj.m_density;
+        end
+        
+        function resistivity = resistivity(obj)
+            resistivity = obj.m_resistivity;
+        end
+        
+        function interPhaseTen = interPhaseTen(obj)
+            interPhaseTen = obj.m_interPhaseTen;
+        end
+        
     end
 end
 

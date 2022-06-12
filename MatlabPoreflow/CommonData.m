@@ -73,10 +73,50 @@ classdef CommonData<handle
             end
         end
         
-        function outputArg = method1(obj,inputArg)
+        function circWatCondMultFact = circWatCondMultFact(obj)
             %METHOD1 此处显示有关此方法的摘要
             %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+            circWatCondMultFact = obj.m_circWatCondMultFact;
+        end
+        
+        function addCircle(obj)
+            obj.m_numCircles = obj.m_numCircles+1;
+        end
+        
+        function addTriangle(obj)
+            obj.m_numTriangles = obj.m_numTriangles+1;
+        end
+        
+        function gravConstX = gravConstX(obj)
+            gravConstX = obj.m_gravConstX;
+        end
+        
+        function gravConstY = gravConstY(obj)
+            gravConstY = obj.m_gravConstY;
+        end
+        
+        function gravConstZ = gravConstZ(obj)
+            gravConstZ = obj.m_gravConstZ;
+        end
+        
+        function datumCappPress = datumCappPress(obj)
+            datumCappPress = obj.m_cappPress;
+        end
+        
+        function maxDatumPc = maxDatumPc(obj)
+            maxDatumPc = obj.m_maxCappPress;
+        end
+        
+        function maxDatumPcLastCycle = maxDatumPcLastCycle(obj)
+            maxDatumPcLastCycle = obj.m_maxPcLastCycle;
+        end
+        
+        function minDatumPc = minDatumPc(obj)
+            minDatumPc = obj.m_minCappPress;
+        end
+        
+        function minDatumPcLastCycle = minDatumPcLastCycle(obj)
+            minDatumPcLastCycle = obj.m_minPcLastCycle;
         end
     end
 end

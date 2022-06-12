@@ -136,7 +136,6 @@ classdef InputData < handle
                 obj.m_baseFileName = inputFileName...
                     (1:strfind(inputFileName, '.')-1);
             end
-            
         end
         
         function removeComments(obj,data)
@@ -589,11 +588,11 @@ classdef InputData < handle
         
         function appendPoreData(obj,thisPoreIdx,throatIdx,thatPoreIdx)
             oldConnNum = obj.m_poreData{thisPoreIdx-1}.first().connNum;
-            for i = 1:oldConnNum
-                temp = obj.m_poreData{thisPoreIdx-1}.second();
-                newPoreConnList{i} = temp{i};
-                temp = obj.m_poreData{thisPoreIdx-1}.third();
-                newThroatConnList{i} = temp;
+            temp1 = obj.m_poreData{thisPoreIdx-1}.second();
+            temp2 = obj.m_poreData{thisPoreIdx-1}.third();
+            for i = 1:oldConnNum                
+                newPoreConnList{i} = temp1{i};                
+                newThroatConnList{i} = temp2{i};
             end
             newPoreConnList{oldConnNum} = thatPoreIdx;
             newThroatConnList{oldConnNum} = throatIdx;
@@ -605,11 +604,12 @@ classdef InputData < handle
             obj.m_poreData{thisPoreIdx-1}.third(newPoreConnList);
         end
         
-        % As the pores are created the data is read from file and supplied back together with contact angles that are
-        % stored in vectors.
+        % As the pores are created the data is read from file and supplied
+        % back together with contact angles that are stored in vectors.        
         % The format of pore network files are:
         % *_node1.dat:
-        % index, x_pos, y_pos, z_pos, connection num, connecting nodes..., at inlet?, at outlet?, connecting links...
+        % index, x_pos, y_pos, z_pos, connection num, connecting nodes...,
+        % at inlet?, at outlet?, connecting links...
         % *_node2.dat:
         % index, volume, radius, shape factor, clay volume
         function loadPoreData(obj)
@@ -1217,8 +1217,6 @@ classdef InputData < handle
             end
         end
         
-        
-        
         function getRadDist(obj,data,model,options)
             
         end
@@ -1233,8 +1231,8 @@ classdef InputData < handle
             stdIdx = idx;
             numNetsInFront = 0;
             if idx > obj.m_origNumPores+1    % +1
-                numNetsInFront = (idx-1)/obj.m_origNumPores;
-                stdIdx = idx - numNetsInFront*obj.m_origNumPores;
+                numNetsInFront = (idx-1)/(obj.m_origNumPores+1);  % +1
+                stdIdx = idx - numNetsInFront*(obj.m_origNumPores+1);
             end
             % PoreStruct *poreProp = m_poreData[stdIdx-1].first();  c++
             % inputData.cpp  line:1133
@@ -1274,7 +1272,7 @@ classdef InputData < handle
                 rad,shapeFact,lenPore1,lenPore2,lenThroat,lenTot)
             stdIdx = idx;
             numNetsInFront = 0;
-            if idx > obj.m_origNumThroats
+            if idx > obj.m_origNumThroats+1   %+1
                 numNetsInFront = 1+(idx-obj.m_origNumThroats-1)/...
                     (obj.m_origNumThroats-obj.m_connectionsRemoved);
                 tmpIdx = idx - numNetsInFront*obj.m_origNumThroats + ...
@@ -1423,6 +1421,180 @@ classdef InputData < handle
             end
         end
         
+        function [xPos,yPos,zPos,connNum,connThroats,connPores,vol,volCl,...
+                rad,shapeFact]=poreData(obj,idx,xPos,yPos,zPos,connNum,...
+                connThroats,connPores,vol,volCl,rad,shapeFact)
+            stdIdx = idx;
+            numNetsInFront = 0;
+            if idx > obj.m_origNumPores+1  % +1
+                numNetsInFront = (idx-1)/(obj.m_origNumPores+1);
+                stdIdx = idx - numNetsInFront*(obj.m_origNumPores+1);
+            end
+            poreProp = obj.m_poreData{stdIdx-1}.m_first();
+            xPos = poreProp.x + ...
+                numNetsInFront*(obj.m_origXDim+obj.m_networkSeparation);
+            yPos = poreProp.y;
+            zPos = poreProp.z;
+            connNum = poreProp.connNum;
+            vol = poreProp.volume;
+            volCl = poreProp.clayVol;
+            rad = poreProp.radius;
+            shapeFact = poreProp.shapeFact;
+            connThroats = cell(1,connNum);
+            connPores = cell(1,connNum);
+            outletPore = false;
+            inletPore = false;
+            temp1 = obj.m_poreData{stdIdx-1}.m_second;
+            temp2 = obj.m_poreData{stdIdx-1}.m_third();
+            for i = 0+1:connNum  % +1                
+                connPores{i} = temp1{i};                
+                connThroats{i} = temp2{i};
+                if connPores{i} ~=0 && connPores{i}~=-1 && numNetsInFront>0
+                    connPores{i}=connPores{i}+numNetsInFront*obj.m_origNumPores;
+                    throatStdIdx = obj.m_reverseThroatHash{connThroats{i}-1};
+                    connThroats{i} = throatStdIdx + numNetsInFront*...
+                        obj.m_origNumThroats - (numNetsInFront-1)*...
+                        obj.m_connectionsRemoved;
+                elseif connPores{i} == 0
+                    outletPore = true;
+                elseif connPores{i} == -1
+                    inletPore = true;
+                end
+            end
+            if obj.m_numNetInSeries > 1 && (outletPore || inletPore)
+                numInst = 0;
+                numHookedUp = 0;
+                mapConns = [];
+                
+                mi = obj.m_inletConnections;
+                mo = obj.m_outletConnections;
+                if outletPore
+                    mapConns=find(cellfun(@(x)isequaln(x,stdIdx),keys(mo)));
+                    numInst = length(mapConns);
+                    for i = 1:numInst
+                        moi_select{i}=obj.m_outletConnections{mapConns(i)};
+                    end
+                else
+                    mapConns = find(cellfun(@(x)isequaln(x,stdIdx),keys(mi)));
+                    numInst = length(mapConns);
+                    for i = 1:numInst
+                        moi_select{i}=obj.m_inletConnections{mapConns(i)};
+                    end
+                end
+                i = 1;
+                for j = 0+1:connNum  % +1
+                    if numNetsInFront < ...
+                            obj.m_numNetInSeries-1 && connPores{j} == 0
+                        assert(~isequal(moi_select{i},moi_select{i+1}));
+                        [connThroats{j},connPores{j}] =obj.getOutletData...
+                            (moi_select{i},numNetsInFront,connThroats{j},connPores{j});
+                        numHookedUp = numHookedUp+1;
+                        i = i+1;
+                    elseif numNetsInFront > 0 && connPores{j} == -1
+                        assert(~isequal(moi_select{i},moi_select{i+1}));
+                        [connThroats{j}, connPores{j}] =obj.getInletData...
+                            (moi_select{i},numNetsInFront,connThroats{j},connPores{j});
+                        numHookedUp = numHookedUp+1;
+                        i = i+1;
+                    elseif numNetsInFront > 0 && connPores{j} == 0
+                        throatStdIdx = obj.m_reverseThroatHash{connThroats{j}-1};
+                        connThroats{j} = throatStdIdx + numNetsInFront*...
+                            obj.m_origNumThroats - (numNetsInFront-1)*...
+                            obj.m_connectionsRemoved;
+                    end
+                end
+                while ~isequal(moi_select{i},moi_select{i+1})
+                    poreIdx = obj.DUMMY_INDEX;
+                    throatIdx = obj.DUMMY_INDEX;%%%%%%%%%%%%%%%%%%%%%%%
+                    if numNetsInFront<obj.m_numNetInSeries-1 && outletPore
+                        [throatIdx,poreIdx]=obj.getOutletData...
+                            (moi_select{i},numNetsInFront,throatIdx,poreIdx);
+                    elseif numNetsInFront > 0 && inletPore
+                        [throatIdx,poreIdx]=obj.getInletData...
+                            (moi_select{i},numNetsInFront,throatIdx,poreIdx);
+                    end
+                    if poreIdx ~= obj.DUMMY_INDEX
+                        connPores{end+1} = poreIdx;
+                        connThroats{end+1} = throatIdx;
+                        connNum = connNum+1;
+                    end
+                    i = i+1;
+                    numHookedUp = numHookedUp+1;
+                end
+            end
+        end
+        
+        function [throatIdx,thatIdx] = getOutletData...
+                (obj,itr,numNetsInFront,throatIdx,thatIdx)
+            value = values(itr);
+            entry = value{1};
+            thatIdx = entry.second()+obj.m_origNumPores*(numNetsInFront+1);
+            throatToOutlet = obj.outletThroat(entry.first());
+            throatToInlet = obj.inletThroat(entry.first());
+            hashedIdx = entry.first();
+            if numNetsInFront > 0 && throatToOutlet
+                hashedIdx = obj.m_reverseThroatHash{hashedIdx-1} + ...
+                    numNetsInFront*obj.m_origNumThroats - ...
+                    (numNetsInFront-1)*obj.m_connectionsRemoved;
+            elseif throatToInlet
+                assert(obj.m_reverseThroatHash{hashedIdx-1}~=obj.DUMMY_INDEX);
+                hashedIdx = obj.m_reverseThroatHash{hashedIdx-1} + ...
+                    (numNetsInFront+1)*obj.m_origNumThroats - ...
+                    numNetsInFront*obj.m_connectionsRemoved;
+            end
+            throatIdx = hashedIdx;
+        end
+        
+        function [throatIdx,thatIdx]=getInletData...
+                (obj,itr,numNetsInFront,throatIdx,thatIdx)
+            value = values(itr);
+            entry = value{1};
+            thatIdx = entry.second()+obj.m_origNumPores*(numNetsInFront-1);
+            throatToOutlet = obj.outletThroat(entry.first());
+            throatToInlet = obj.inletThroat(entry.first());
+            hashedIdx = entry.first();
+            if numNetsInFront > 1 && throatToOutlet
+                hashedIdx = obj.m_reverseThroatHash{hashedIdx-1}+...
+                    (numNetsInFront-1)*obj.m_origNumThroats - ...
+                    (numNetsInFront-2)*obj.m_connectionsRemoved;
+            elseif throatToInlet
+                hashedIdx = obj.m_reverseThroatHash{hashedIdx-1} + ...
+                    numNetsInFront*obj.m_origNumThroats - ...
+                    (numNetsInFront-1)*obj.m_connectionsRemoved;
+            end
+            throatIdx = hashedIdx;
+        end
+        
+        function outletThroat = outletThroat(obj,throatIdx)
+            throat = obj.m_throatData{throatIdx-1};
+            outletThroat = throat.poreOne == 0 || throat.poreTwo == 0;
+        end
+        
+        function inletThroat = inletThroat(obj,throatIdx)
+            throat = obj.m_throatData{throatIdx-1};
+            inletThroat = throat.poreOne == -1 || throat.poreTwo == -1;
+        end
+        
+        % There is a lot of memory assosiated with storing all network data.
+        % Best to clean up after ourself before proceeding
+        function finishedLoadingNetwork(obj)
+            for i = 1:size(obj.m_poreData,2)+1
+                obj.m_poreData{i}.m_second = [];
+                obj.m_poreData{i}.m_third = [];
+                obj.m_poreData{i}.m_first = [];
+            end
+            for j = 1:size(obj.m_throatData,2)+1
+                obj.m_throatData{j}= [];
+            end
+            clear obj.m_poreData;
+            clear obj.m_throatData;
+            clear obj.m_inletPores;
+            clear obj.m_outletPores;
+            clear obj.m_outletConnections;
+            clear obj.m_inletConnections;
+            clear obj.m_throatHash;
+            clear obj.m_reverseThroatHash;
+        end
     end
 end
 

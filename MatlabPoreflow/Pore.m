@@ -16,9 +16,9 @@ classdef Pore<handle&RockElem
                 insideSatBox,initSolverPrs,connThroats)
             %UNTITLED11 构造此类的实例
             %   此处显示详细说明
-            if nargin==13
-                obj = RockElem(common,oil,water,radius,volume,volumeClay,...
-                    shapeFactor,initConAng,size(connThroats,2));
+            obj = obj@RockElem(common,oil,water,radius,volume,volumeClay,...
+                    shapeFactor,initConAng,size(connThroats,2),true);
+            if nargin==13                
                 obj.m_node = node;
                 obj.m_isInsideSatBox = insideSatBox;
                 obj.m_isInsideSolverBox = insideSlvBox;
@@ -44,7 +44,7 @@ classdef Pore<handle&RockElem
                 obj.m_maxAspectRatio = obj.m_elemShape.radius()/maxRad;
                 obj.m_minAspectRatio = obj.m_elemShape.radius()/minRad;
             else % 这是Pore的第二个构造函数，radius代表Pore& pore
-                obj = RockElem(common,oil,water,radius);
+                % obj = RockElem(common,oil,water,radius);
                 obj.m_oilSolverPrs = radius.m_oilSolverPrs;
                 obj.m_watSolverPrs = radius.m_watSolverPrs;
                 obj.m_oilSolverVolt = radius.m_oilSolverVolt;
@@ -55,10 +55,15 @@ classdef Pore<handle&RockElem
             end
         end
         
-        function outputArg = method1(obj,inputArg)
-            %METHOD1 此处显示有关此方法的摘要
-            %   此处显示详细说明
-            outputArg = obj.Property1 + inputArg;
+        % All connecting throats for a pore should already have been set 
+        % in the pore constructor.
+        function addConnections(obj,first,second,inBdr,outBdr,moveBdr)
+            fprintf('Illegal operation\r\n');
+            exit;
+        end
+        
+        function node = node(obj)
+            node = obj.m_node;
         end
     end
 end

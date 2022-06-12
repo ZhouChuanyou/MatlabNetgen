@@ -3,7 +3,7 @@ classdef Netsim<handle
     %   此处显示详细说明
     
     properties
-        MAX_FLOW_ERR;
+        MAX_FLOW_ERR=0.02;
         DUMMY_IDX = -99;
         m_randSeed;
         
@@ -523,7 +523,7 @@ classdef Netsim<handle
                 obj.m_solverBoxStart = obj.m_satBoxStart;
                 obj.m_solverBoxEnd = obj.m_satBoxEnd;
             end
-            numSingletsRemoved = obj.initNetwork(input, drainSinglets);
+            [numSingletsRemoved,input] = obj.initNetwork(input, drainSinglets);
         end
         
         % Creates all the pores and throats
@@ -531,15 +531,88 @@ classdef Netsim<handle
             poreHash = cell(1,obj.m_numPores);
             throatHash = cell(1,obj.m_numThroats);
             throatHash(:)= {obj.DUMMY_IDX};
-            newNumPores = obj.setupPoreHashing(input, poreHash);
+            [newNumPores,input,poreHash] = obj.setupPoreHashing(input, poreHash);
             obj.m_rockLattice = cell(1,newNumPores + 2);
             connectingPores = cell(1,obj.m_numThroats);
+            co = containers.Map(0,0);
+            %             connectingPores(:)=co;
+            for i = 1:length(connectingPores)
+                connectingPores{i} = co;
+            end
             % All throats connected to the in/outlet are
             % recorded while crating the throats
             throatsToInlet = [];
             throatsToOutlet = [];
-            newNumThroats = obj.readAndCreateThroats(input,connectingPores,...
+            [newNumThroats,input,connectingPores,throatsToInlet,...
+                throatsToOutlet,poreHash,throatHash] = ...
+                obj.readAndCreateThroats(input,connectingPores,...
                 throatsToInlet,throatsToOutlet,poreHash,throatHash,newNumPores);
+            [input,connectingPores,poreHash,throatHash] = ...
+                obj.readAndCreatePores(input, connectingPores, poreHash,...
+                throatHash, newNumPores);
+            input.finishedLoadingNetwork();
+            obj.m_xSize = obj.m_xSize*obj.m_shavingFraction;
+            obj.m_numPores = newNumPores;
+            obj.m_rockVolume = obj.m_xSize * obj.m_ySize * obj.m_zSize *...
+                (obj.m_satBoxEnd - obj.m_satBoxStart);
+            yMid = obj.m_ySize/2.0;
+            zMid = obj.m_zSize/2.0;
+            % +1 
+            throatsToInlet=obj.createInAndOutletPore...
+                (0+1,-1.0E-15,yMid,zMid,throatsToInlet);
+            % +1
+            throatsToOutlet = obj.createInAndOutletPore(obj.m_numPores+1+1,...
+                obj.m_xSize+1.0E-15,yMid,zMid,throatsToOutlet);
+            lenToRadRatio = newNumThroats;
+            runIdx = 0+1;  % +1
+            % Adding the pore pointers to the throats had
+            % to be delayed until after having created
+            % the pores. The network should now be properly initialized. 
+            % P = parpool(6);
+            parfor i = 1:obj.m_numThroats
+                key = keys(connectingPores{i});
+                value = values(connectingPores{i});
+                poreIndex1 = obj.checkPoreIndex(key{1});
+                poreIndex2 = obj.checkPoreIndex(value{1}); 
+                if poreIndex1 >= 0+1 && poreIndex2 >= 0+1  % +1
+                    % +1
+                    assert(poreIndex1<obj.m_numPores+2+1 && poreIndex2<obj.m_numPores+2+1);
+                    pore1 = obj.m_rockLattice{poreIndex1};  
+                    pore2 = obj.m_rockLattice{poreIndex2};
+                    assert(~isempty(pore1) && ~isempty(pore2));
+                    obj.m_rockLattice{obj.m_numPores+2+runIdx}.addConnections...
+                        (pore1, pore2, obj.m_xSize*obj.m_solverBoxStart,...
+                        obj.m_xSize*obj.m_solverBoxEnd,~obj.m_useAvrPrsAsBdr);
+                end
+            end
+            % delete(P);
+        end
+        
+        % We're using different indicies for out and inlet. Paal-Eric uses -1 and 0 
+        % wheras we use 0 and (numPores+1), hence we need to renumber these. 
+        % The reason for this is that -1 is not a good index when storing the element 
+        % pointers in a vector.
+        function index = checkPoreIndex(obj,index)
+            if index == -1
+                index = 0+1;  % +1
+            elseif index == 0
+                index = obj.m_numPores + 1+1; % +1
+            else
+                index = index+1;  % add this line by Zhou, 2022.6.10
+            end
+        end
+        
+        % In and outlet only need to know what throats are connected to it.
+        % Their indicies are 0 and (n_pores + 1)
+        function connThroats=createInAndOutletPore(obj,index,xPos,yPos,zPos,connThroats)
+            if xPos > 0.0 && xPos < obj.m_xSize
+                fprintf('\r\nError: Entry and exit reservoirs cannot be\r\n');
+                fprintf('within the network model area.\r\n');
+                exit;
+            end
+            currNode = Node(index,obj.m_numPores,xPos,yPos,zPos,obj.m_xSize);
+            pore=EndPore(obj.m_commonData,currNode,obj.m_oil,obj.m_water,connThroats);
+            obj.m_rockLattice{currNode.index()} = pore;
         end
         
         % The data for the throats are read from the link files. Since the pores are not yet created their
@@ -559,7 +632,8 @@ classdef Netsim<handle
             maxConAng = 0.0;
             delta= [];
             eta=[];
-            input.initConAng(minConAng, maxConAng, delta, eta);
+            [minConAng, maxConAng, delta, eta]=input.initConAng(minConAng,...
+                maxConAng, delta, eta);
             numLengthErrors = 0;
             newNumThroats = 0;
             for index = 1+1:obj.m_numThroats+1  % +1
@@ -573,50 +647,119 @@ classdef Netsim<handle
                 lenThroat = [];
                 volume = [];
                 clayVolume = [];
-                input.throatData(index,poreOneIdx,poreTwoIdx,volume,...
-                    clayVolume,radius,shapeFactor,lenPore1, lenPore2,...
-                    lenThroat,lenTot);
+                [poreOneIdx,poreTwoIdx,volume,clayVolume,radius,...
+                    shapeFactor,lenPore1, lenPore2,lenThroat,lenTot]=...
+                    input.throatData(index,poreOneIdx,poreTwoIdx,volume,...
+                    clayVolume,radius,shapeFactor,lenPore1, lenPore2,lenThroat,lenTot);
                 if poreOneIdx > 0
-                    temp = poreHash{poreOneIdx-1};
-                    temp(keys(poreHash{poreOneIdx-1})) = ...
-                        values(connectingPores{index-1});
+                    temp =containers.Map(keys(poreHash{poreOneIdx-1+1}),...
+                        values(connectingPores{index-1}));
                     connectingPores{index-1} = temp;
+                    %                     temp = poreHash{poreOneIdx-1+1};    % +1
+                    %                     key = keys(temp);
+                    %                     value = values(connectingPores{index-1});
+                    %                     temp(key{1}) = ...
+                    %                         value{1};
+                    %                     connectingPores{index-1} = temp;
                 else
-                    temp = connectingPores{index-1};
-                    remove(temp, keys(connectingPores{index-1}));
-                    temp(poreOneIdx) = values(connectingPores{index-1});
+                    temp =containers.Map({poreOneIdx},values(connectingPores{index-1}));
+                    connectingPores{index-1} = temp;
+                    %                     temp = connectingPores{index-1};
+                    %                     remove(temp, keys(connectingPores{index-1}));
+                    %                     temp(poreOneIdx) = values(connectingPores{index-1});
                 end
                 if poreTwoIdx > 0
-                    temp = connectingPores{index-1};
-                    temp(keys(connectingPores{index-1})) = ...
-                        keys(poreHash{poreTwoIdx-1});
+                    temp =containers.Map(keys(connectingPores{index-1}),...
+                        keys(poreHash{poreTwoIdx-1+1}));
                     connectingPores{index-1} = temp;
+                    %                     temp = connectingPores{index-1};
+                    %                     temp(keys(connectingPores{index-1})) = ...
+                    %                         keys(poreHash{poreTwoIdx-1});
+                    %                     connectingPores{index-1} = temp;
                 else
-                    temp = connectingPores{index-1};
-                    temp(keys(connectingPores{index-1})) = poreTwoIdx;
+                    temp =containers.Map(keys(connectingPores{index-1}),poreTwoIdx);
                     connectingPores{index-1} = temp;
+                    %                     temp = connectingPores{index-1};
+                    %                     temp(keys(connectingPores{index-1})) = poreTwoIdx;
+                    %                     connectingPores{index-1} = temp;
                 end
-                if keys(connectingPores{index - 1})> 0 || ...
-                        values(connectingPores{index - 1}) > 0
+                key = keys(connectingPores{index - 1});
+                value = values(connectingPores{index - 1});
+                
+                if key{1}> 0 ||value{1} > 0
                     newNumThroats = newNumThroats+1;
                     throatHash{index-1} = newNumThroats;
-                    if keys(connectingPores{index - 1}) == obj.DUMMY_IDX
-                        if values(poreHash{poreOneIdx-1}) < obj.m_xSize/2.0
-                            temp = connectingPores{index-1};
-                            remove(temp, keys(connectingPores{index-1}));
-                            temp(-1) = values(connectingPores{index-1});
+                    if key{1} == obj.DUMMY_IDX
+                        value2 = values(poreHash{poreOneIdx-1+1});  % +1
+                        value3 = values(poreHash{poreTwoIdx-1+1});  % +1
+                        if value2{1} < obj.m_xSize/2.0
+                            temp = containers.Map(-1,value);
                             connectingPores{index - 1} = temp;
                         else
-                            temp = connectingPores{index-1};
-                            remove(temp, keys(connectingPores{index-1}));
-                            temp(0) = values(connectingPores{index-1});
+                            temp = containers.Map(0,value);
+                            connectingPores{index - 1} = temp;
+                            %                             temp = connectingPores{index-1};
+                            %                             remove(temp, keys(connectingPores{index-1}));
+                            %                             temp(0) = values(connectingPores{index-1});
+                            %                             connectingPores{index - 1} = temp;
+                        end
+                    elseif value{1}==obj.DUMMY_IDX
+                        if value3{1} < obj.m_xSize/2.0
+                            temp = containers.Map(key, -1);
+                            connectingPores{index - 1} = temp;
+                        else
+                            temp = containers.Map(key, 0);
                             connectingPores{index - 1} = temp;
                         end
-                    elseif values(connectingPores{index - 1})==obj.DUMMY_IDX
-                        if 
-                        end
+                    end
+                    initConAng = obj.weibull(minConAng, maxConAng, delta, eta);
+                    adjustingVol = obj.m_clayAdjust*(volume+clayVolume);
+                    adjustingVol = min(adjustingVol, volume);
+                    adjustingVol = -min(-adjustingVol, clayVolume);
+                    volume = volume - adjustingVol;
+                    clayVolume = clayVolume + adjustingVol;
+                    if abs(lenPore1+lenPore2+lenThroat-lenTot)/lenTot>0.01
+                        numLengthErrors = numLengthErrors+1;
+                    end
+                    throat = Throat(obj.m_commonData,obj.m_oil,obj.m_water,...
+                        radius,volume,clayVolume,shapeFactor,initConAng,...
+                        lenThroat,lenPore1,lenPore2,newNumPores + 1 + newNumThroats);
+                    obj.m_rockLattice{end+1}= throat;
+                    key = keys(connectingPores{index - 1});
+                    value = values(connectingPores{index - 1});
+                    if key{1} == -1 || value{1} == -1
+                        throatsToInlet{end+1} = throat;
+                    elseif key{1} == 0 || value{1} == 0
+                        throatsToOutlet{end+1} = throat;
                     end
                 end
+            end
+            if numLengthErrors > 0
+                fprintf('\r\nWarning: For %d throats the lengths of the\r\n',numLengthErrors);
+                fprintf('pore-throat-pore did not match the total length.\r\n');
+                fprintf('This is generally only an artifact of the network\r\n');
+                fprintf('reconstruction process, and is not serious.\r\n');
+                fid = fopen('PrtData','w');
+                for i = 1:length(obj.m_prtOut)
+                    fprintf('——————————————');
+                    fprintf(fid,'%s\r\n',obj.m_prtOut{i});
+                    fprintf('\r\nWarning: For %d throats the lengths of the\r\n',numLengthErrors);
+                    fprintf('pore-throat-pore did not match the total length.\r\n');
+                    fprintf('This is generally only an artifact of the network\r\n');
+                    fprintf('reconstruction process, and is not serious.\r\n');
+                    fprintf('——————————————');
+                end
+                fclose(fid);
+            end
+        end
+        
+        function weib = weibull(obj,min,max,delta,eta)
+            randNum = rand();
+            if delta < 0.0 && eta < 0.0  % Uniform Distribution
+                weib = min + (max-min)*randNum;
+            else  % Weibull Distribution
+                weib = (max - min) * power(-delta*log(randNum*(1.0-exp...
+                    (-1.0/delta))+exp(-1.0/delta)), 1.0/eta) + min;
             end
         end
         
@@ -626,7 +769,7 @@ classdef Netsim<handle
                 entry = containers.Map(obj.DUMMY_IDX, 0.0);
                 value = values(entry);
                 key = keys(entry);
-                input.poreLocation(index,value{1});
+                value{1} = input.poreLocation(index,value{1});
                 if value{1}>=obj.m_xSize*(1.0-obj.m_shavingFraction)/2.0...
                         && value{1}<=obj.m_xSize-obj.m_xSize*(1.0-obj.m_shavingFraction)/2.0
                     remove(entry,key{1});
@@ -634,6 +777,93 @@ classdef Netsim<handle
                     entry(numPores) = value{1};
                 end
                 poreHash{index-1} = entry;
+            end
+        end
+        
+        % The pore data is read from the node files. At this point the throats are already created and the pointers
+        % can be set. The strucure of the node files are as follows:
+        % *_node1.dat:
+        % index, x_pos, y_pos, z_pos, connection num, connecting nodes..., at inlet?, at outlet?, connecting links...
+        % *_node2.dat:
+        % index, volume, radius, shape factor, clay volume
+        function [input,connectingPores,poreHash,throatHash] = ...
+                readAndCreatePores(obj,input,connectingPores,poreHash,...
+                throatHash,newNumPores)
+            minConAng = 0.0;
+            maxConAng = 0.0;
+            delta = [];
+            eta = [];
+            shaveOff = obj.m_xSize*(1.0-obj.m_shavingFraction)/2.0;
+            [minConAng,maxConAng,delta,eta]=input.initConAng...
+                (minConAng,maxConAng,delta,eta);
+            newIndex = 0;  
+            for index = 1+1:obj.m_numPores+1  % +1
+                connNumber = [];
+                xPos = [];
+                yPos = [];
+                zPos = [];
+                volume = [];
+                radius = [];
+                shapeFactor =[];
+                clayVolume = [];
+                connThroats = [];
+                connPores = [];
+                connectingThroats = [];
+                [xPos,yPos,zPos,connNumber,connThroats,connPores,volume,...
+                    clayVolume,radius,shapeFactor]=input.poreData...
+                    (index,xPos,yPos,zPos,connNumber,connThroats,...
+                    connPores,volume,clayVolume,radius,shapeFactor);
+                if xPos >= shaveOff && xPos <= obj.m_xSize-shaveOff
+                    newIndex = newIndex+1;
+                    initConAng=obj.weibull(minConAng,maxConAng,delta,eta);
+                    adjustingVol = obj.m_clayAdjust*(volume+clayVolume);
+                    adjustingVol = min(adjustingVol, volume);
+                    adjustingVol = -min(-adjustingVol, clayVolume);
+                    volume =volume - adjustingVol;
+                    clayVolume = clayVolume+adjustingVol;
+                    connectingThroats =cell(1,connNumber);
+                    for j =0+1:connNumber  %+1
+                        hashedThroatIdx= throatHash{connThroats{j}-1+1};%+1
+                        hashedPoreIdx = connPores{j};
+                        try
+                            key = keys(poreHash{connPores{j}-1+1}); %+1
+                            value = values(poreHash{connPores{j}-1+1});
+                        catch
+                            key = -1000000;  % connPores{j}=-1时
+                            value = -1000000;
+                        end
+                        if hashedPoreIdx>0+1 && key{1}~=obj.DUMMY_IDX  % +1
+                            hashedPoreIdx = key{1}; %+1
+                        elseif hashedPoreIdx > 0+1 && value{1}<obj.m_xSize/2.0  % +1
+                            hashedPoreIdx = -1;   % +1
+                        elseif hashedPoreIdx > 0+1 && value{1}>obj.m_xSize/2.0  % +1
+                            hashedPoreIdx = 0;  % +1
+                        end
+                        try
+                            key = keys(connectingPores{connThroats{j}-1+1}); %+1
+                            value = values(connectingPores{connThroats{j}-1+1});
+                        catch
+                            key = -1000000;
+                            value = -1000000;
+                        end
+                        
+                        assert(newIndex==key{1} || newIndex == value{1});
+                        assert(hashedPoreIdx==key{1} || hashedPoreIdx==value{1}); %+1
+                        connectingThroats{j} = obj.m_rockLattice...
+                            {newNumPores + 1 + hashedThroatIdx+1};  
+                    end
+                    initSolvPrs = (obj.m_outletSolverPrs + obj.m_inletSolverPrs)/2.0;
+                    currNode = Node(newIndex,newNumPores,...
+                        xPos-shaveOff,yPos,zPos,obj.m_xSize*obj.m_shavingFraction);
+                    insideSlvrBox = currNode.isInsideBox...
+                        (obj.m_solverBoxStart,obj.m_solverBoxEnd);
+                    insideSatBox = currNode.isInsideBox...
+                        (obj.m_satBoxStart,obj.m_satBoxEnd);
+                    pore = Pore(obj.m_commonData,currNode,obj.m_oil,...
+                        obj.m_water,radius,volume,clayVolume,shapeFactor,...
+                        initConAng,insideSlvrBox,insideSatBox,initSolvPrs,connectingThroats);
+                    obj.m_rockLattice{newIndex +1} = pore;  % +1
+                end
             end
         end
     end

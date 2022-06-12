@@ -14,15 +14,15 @@ classdef EndPore<handle&Pore
         function obj = EndPore(common,node,oil,water,connThroats)
             %UNTITLED10 构造此类的实例
             %   此处显示详细说明
-            if nargin==5
-                obj = Pore(common,node,oil,water,1.0E-5, 0.0, 0.0,...
+            obj = obj@Pore(common,node,oil,water,1.0E-5, 0.0, 0.0,...
                     sqrt(3.0)/36.0, 0.0, false, false, 0.0, connThroats);
+            if nargin==5                
                 obj.m_isInOilFloodVec = true;
                 obj.m_isInWatFloodVec = true;
                 polyShape = obj.m_elemShape;
                 for i = 1:polyShape.numCorners()
-                    polyShape.oilInCorner{i}.isInCollapseVec(true);
-                    polyShape.oilInCorner{i}.isInReformVec(true);
+                    polyShape.oilInCorner(i).isInCollapseVec(true);
+                    polyShape.oilInCorner(i).isInReformVec(true);
                 end
                 obj.m_waterSaturation = 0.5;
                 if node.isExitRes()

@@ -3,10 +3,10 @@ classdef RockElem<handle
     %   此处显示详细说明
     
     properties
-        ERROR_STATE;    
-        USE_GRAV_IN_KR; 
-        COND_CUT_OFF;   
-        PI;             
+        ERROR_STATE=false;    
+        USE_GRAV_IN_KR=false; 
+        COND_CUT_OFF=0.0;   
+        PI=pi;             
 
         m_randomNum;    
         m_iAmAPore;     
@@ -85,6 +85,7 @@ classdef RockElem<handle
                 obj.m_poreToPoreCond = 0.0;
                 obj.m_numOilNeighbours = 0;
                 obj.m_fillingEvent = -2;
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if shapeFact <= sqrt(3.0)/36.0  % Triangular:  0 >= G >= sqrt(3.0)/36.0
                     obj.m_elemShape = Triangle(obj,obj.m_commonData, oil,...
                         water, radius, shapeFact, initConAng, obj.m_connectionNum);
@@ -137,6 +138,66 @@ classdef RockElem<handle
                         water,radius.m_elemShape);
                 end
                 
+            end
+        end
+        
+        function shape=shape(obj)
+            shape = obj.m_elemShape;
+        end
+        
+        function isExitRes = isExitRes(obj)
+            isExitRes = obj.m_isExitRes;
+        end
+        
+        function isEntryRes = isEntryRes(obj)
+            isEntryRes = obj.m_isEntryRes;
+        end
+        
+        function isTrappingEntry = isTrappingEntry(obj,isIt)
+            if nargin == 2
+                obj.m_isTrappingEntry = isIt;
+                isTrappingEntry = obj.m_isTrappingEntry;
+            elseif nargin == 1
+                isTrappingEntry = obj.m_isTrappingEntry;
+            end
+        end
+        
+        function isTrappingExit = isTrappingExit(obj,isIt)
+            if nargin == 2
+                obj.m_isTrappingExit = isIt;
+                isTrappingExit = obj.m_isTrappingExit;
+            elseif nargin == 1
+                isTrappingExit = obj.m_isTrappingExit;
+            end
+        end
+        
+        function isInsideSolverBox = isInsideSolverBox(obj)
+            isInsideSolverBox = obj.m_isInsideSolverBox;
+        end
+        
+        function isInsideSatBox = isInsideSatBox(obj)
+            isInsideSatBox = obj.m_isInsideSatBox;
+        end
+        
+        function isExitOrEntryRes = isExitOrEntryRes(obj)
+            isExitOrEntryRes = obj.m_isExitRes || obj.m_isEntryRes;
+        end
+        
+        function isOnInletSlvrBdr = isOnInletSlvrBdr(obj,isIt)
+            if nargin == 2
+                obj.m_isOnInletSlvrBdr = isIt;
+                isOnInletSlvrBdr = obj.m_isOnInletSlvrBdr;
+            elseif nargin == 1
+                isOnInletSlvrBdr = obj.m_isOnInletSlvrBdr;
+            end
+        end
+        
+        function isOnOutletSlvrBdr = isOnOutletSlvrBdr(obj,isIt)
+            if nargin == 2
+                obj.m_isOnOutletSlvrBdr = isIt;
+                isOnOutletSlvrBdr = obj.m_isOnOutletSlvrBdr;
+            elseif nargin == 1
+                isOnOutletSlvrBdr = obj.m_isOnOutletSlvrBdr;
             end
         end
     end
